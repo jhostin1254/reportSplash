@@ -15,7 +15,7 @@ define('SP_TALENTO_HUMANO', 14);
 global $DB, $CFG;
 
 //$DB->set_debug(true);
-//encontrar el id de la categoria de actual 
+
 $categoryid  = $DB->get_record('config', ['name' => 'wssplashcategoryid'])->value;
 $role_config = [SP_STUDENT];
 
@@ -136,32 +136,22 @@ $glob_roles = [];
 //echo "<pre>";
 //print_r($courses);
 //echo "</pre>";die();
-
 foreach ($courses as $key => $value) {
 
-    //se divide el nombre en partes para obtener el nombre del curso, departamento, equipo y categoria
     $tmp_data = explode('-', $value->fullname);
-    unset($value->fullname);
+unset($value->fullname);
 
-    //awui se busca si el nombre del curso es madre de dios si no es se aplica el if 
-    $pos = strpos($tmp_data[0], 'MADRE DE DIOS');
+$nombre_departamento = $tmp_data[0];
+if (strpos($nombre_departamento, 'MADRE DE DIOS') !== false) {
+    $value->departamento = 'MADRE DE DIOS';
+} else {
+    $split_name = explode(' DE ', $nombre_departamento);
+    $value->departamento = end($split_name);
+}
 
-    //si el nombre del curso no contiene MADRE DE DIOS se aplica el if
-    if ($pos === false) {
-        //se crea una variable split_name que contiene el nombre del curso dividido por DE gracias al explode
-        $split_name = explode(' DE ', $tmp_data[0]);
-        //y awui se le asigna a value->departamento el ultimo elemento del array split_name
-        $value->departamento = $split_name[count($split_name) - 1];
-    } else {
-        $value->departamento = 'MADRE DE DIOS';
-    }
-    //awui se terminan de asignar los valores a value 
-    //hasta ahora tenemos el departamento, nombre del curso, equipo y categoria
-    $value->name         = $tmp_data[0];
-    $value->equipo       = isset($tmp_data[3]) ? $tmp_data[3] : '';
-    $value->categoria    = isset($tmp_data[4]) ? $tmp_data[4] : '';
-
-    
+$value->name      = $nombre_departamento;
+$value->equipo    = $tmp_data[3] ?? '';
+$value->categoria = $tmp_data[4] ?? '';
     $sql_roles = "SELECT concat(u.id,r.id,ra.id) as ignoreid,u.id as userid, u.firstname ,u.lastname, u.email,u.username as dni, u.address, r.id as roleid, r.name as rolfulname ,r.shortname as rolename, u.phone2, u.city as departamento, c.id as courseid
                   FROM mdl_user u
                   JOIN mdl_user_enrolments ue ON ue.userid = u.id
@@ -419,11 +409,6 @@ foreach ($courses as $key => $value) {
     $value->users[] = array_values($sql);
 
 }
-
-//me quede aqui
-
-
-
 $output = $courses;
 
 $max = 0;
