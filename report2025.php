@@ -1,5 +1,5 @@
 <?php
-//$time_start = microtime(true); 
+
 require_once dirname(dirname(dirname(dirname(__FILE__)))) . '/config.php';
 
 
@@ -14,7 +14,7 @@ define('SP_TALENTO_HUMANO', 14);
 
 global $DB, $CFG;
 
-//$DB->set_debug(true);
+
 
 $categoryid  = $DB->get_record('config', ['name' => 'wssplashcategoryid'])->value;
 $role_config = [SP_STUDENT];
@@ -115,6 +115,7 @@ $columnos_excel = ['A',
 $output = [];
 
 $courses = $DB->get_records('course', ['category' => $categoryid, 'visible' => 1], '', 'id,fullname, idnumber,shortname as aula,visible');
+$second_courses = $DB->get_records('course', ['category' => $categoryid], '', 'id,fullname,shortname as aula,visible');
 
 function cmp($a, $b)
 {
@@ -122,137 +123,112 @@ function cmp($a, $b)
 }
 
 usort($courses, "cmp");
-
-$second_courses = $DB->get_records('course', ['category' => $categoryid], '', 'id,fullname,shortname as aula,visible');
 usort($second_courses, "cmp");
 
-//echo "<pre>";
-//print_r($courses);
-//echo "</pre>";
-
-//die();
 $glob_roles = [];
 
-//echo "<pre>";
-//print_r($courses);
-//echo "</pre>";die();
+//por wue no en vez de wue cada vez que se llama a la base de datos no se guarda en un array y se usa ese array
 foreach ($courses as $key => $value) {
-
+    // Procesamiento inicial del nombre del curso
     $tmp_data = explode('-', $value->fullname);
-unset($value->fullname);
+    unset($value->fullname);
 
-$nombre_departamento = $tmp_data[0];
-if (strpos($nombre_departamento, 'MADRE DE DIOS') !== false) {
-    $value->departamento = 'MADRE DE DIOS';
-} else {
-    $split_name = explode(' DE ', $nombre_departamento);
+    // Extraer el departamento
+    $split_name = explode(' DE ', $tmp_data[0]);
     $value->departamento = end($split_name);
-}
 
-$value->name      = $nombre_departamento;
-$value->equipo    = $tmp_data[3] ?? '';
-$value->categoria = $tmp_data[4] ?? '';
-    $sql_roles = "SELECT concat(u.id,r.id,ra.id) as ignoreid,u.id as userid, u.firstname ,u.lastname, u.email,u.username as dni, u.address, r.id as roleid, r.name as rolfulname ,r.shortname as rolename, u.phone2, u.city as departamento, c.id as courseid
-                  FROM mdl_user u
-                  JOIN mdl_user_enrolments ue ON ue.userid = u.id
-                  JOIN mdl_enrol e ON e.id = ue.enrolid
-                  JOIN mdl_role_assignments ra ON ra.userid = u.id
-                  JOIN mdl_context ct ON ct.id = ra.contextid AND ct.contextlevel = 50
-                  JOIN mdl_course c ON c.id = ct.instanceid AND e.courseid = c.id
-                  JOIN mdl_role r ON r.id = ra.roleid
-                  WHERE  c.id = " . $value->id . "
-                  AND e.status = 0 AND u.suspended = 0 AND u.deleted = 0
-                  AND ue.status = 0 ORDER BY u.lastname ASC";
+    // Asignación de valores básicos
+    $value->name = $tmp_data[0] ?? '';
+    $value->equipo = $tmp_data[3] ?? '';
+    $value->categoria = $tmp_data[4] ?? '';
 
-    $sql = $DB->get_records_sql($sql_roles);
+    // Consulta para usuarios y roles
+    $sql_roles = "SELECT concat(u.id,r.id,ra.id) as ignoreid, u.id as userid, 
+                 u.firstname, u.lastname, u.email, u.username as dni, u.address, 
+                 r.id as roleid, r.name as rolfulname, r.shortname as rolename, 
+                 u.phone2, u.city as departamento, c.id as courseid
+              FROM mdl_user u
+              JOIN mdl_user_enrolments ue ON ue.userid = u.id
+              JOIN mdl_enrol e ON e.id = ue.enrolid
+              JOIN mdl_role_assignments ra ON ra.userid = u.id
+              JOIN mdl_context ct ON ct.id = ra.contextid AND ct.contextlevel = 50
+              JOIN mdl_course c ON c.id = ct.instanceid AND e.courseid = c.id
+              JOIN mdl_role r ON r.id = ra.roleid
+              WHERE c.id = :courseid
+              AND e.status = 0 AND u.suspended = 0 AND u.deleted = 0
+              AND ue.status = 0 
+              ORDER BY u.lastname ASC";
 
-    $value->users = [];
+    $sql = $DB->get_records_sql($sql_roles, ['courseid' => $value->id]);
 
-    $sql_tot_splash = "SELECT concat(u.id,r.id,ra.id) as ignoreid,u.id as userid, u.firstname ,u.lastname,u.username as dni, u.email, u.address, r.id as roleid ,r.shortname as rolename, u.city as departamento, c.id as courseid
-                  FROM mdl_user u
-                  JOIN mdl_user_enrolments ue ON ue.userid = u.id
-                  JOIN mdl_enrol e ON e.id = ue.enrolid
-                  JOIN mdl_role_assignments ra ON ra.userid = u.id
-                  JOIN mdl_context ct ON ct.id = ra.contextid AND ct.contextlevel = 50
-                  JOIN mdl_course c ON c.id = ct.instanceid AND e.courseid = c.id
-                  JOIN mdl_role r ON r.id = ra.roleid AND r.id = " . SP_STUDENT . "
-                  WHERE  c.id = " . $value->id . "
-                  AND e.status = 0 AND u.suspended = 0 AND u.deleted = 0
-                  AND ue.status = 0 ORDER BY u.lastname ASC";
-    $tot_splash = $DB->get_records_sql($sql_tot_splash);
+    // Consulta para splashers (estudiantes)
+    $sql_tot_splash = "SELECT concat(u.id,r.id,ra.id) as ignoreid, u.id as userid, 
+                      u.firstname, u.lastname, u.username as dni, u.email, u.address, 
+                      r.id as roleid, r.shortname as rolename, u.city as departamento, 
+                      c.id as courseid
+                   FROM mdl_user u
+                   JOIN mdl_user_enrolments ue ON ue.userid = u.id
+                   JOIN mdl_enrol e ON e.id = ue.enrolid
+                   JOIN mdl_role_assignments ra ON ra.userid = u.id
+                   JOIN mdl_context ct ON ct.id = ra.contextid AND ct.contextlevel = 50
+                   JOIN mdl_course c ON c.id = ct.instanceid AND e.courseid = c.id
+                   JOIN mdl_role r ON r.id = ra.roleid AND r.id = :studentrole
+                   WHERE c.id = :courseid
+                   AND e.status = 0 AND u.suspended = 0 AND u.deleted = 0
+                   AND ue.status = 0 
+                   ORDER BY u.lastname ASC";
+
+    $tot_splash = $DB->get_records_sql($sql_tot_splash, [
+        'courseid' => $value->id,
+        'studentrole' => SP_STUDENT
+    ]);
 
     $prof = 0;
-
     $roles = [];
+    $glob_roles = [];
+    $processed_ids = [];
+    $teacher_data = null;
 
+    // Procesar roles y identificar profesor
     foreach ($sql as $ke => $va) {
-        if ($va->userid == $prof) {
-            //unset($sql[$ke]);
-            //continue;
-        }
         if (SP_TEACHER_NO_EDITING == $va->roleid) {
             $prof = $va->userid;
+            $va->spl = count($tot_splash);
+            $teacher_data = $va;
         }
-        $roles[$va->roleid]        = ['name' => $va->rolename, 'valeu' => ''];
+        $roles[$va->roleid] = ['name' => $va->rolename, 'valeu' => ''];
         $glob_roles[$va->rolename] = '';
     }
 
-    $wp_data   = [];
-    $tmp_keys  = array_keys($sql);
-    $tmp_key_c = '';
+    // Procesar usuarios
+    $wp_data = [];
     $repetidos = [];
+    $final_users = [];
+
     foreach ($sql as $ke => $va) {
-        $irse = false;
-        foreach ($repetidos as $repe) {
-            if ($ke == $repe) {
-                $irse = true;
-            }
-        }
-        if ($irse) {
+        if (in_array($va->ignoreid, $processed_ids)) {
             continue;
         }
-        //$tmp_roles = $roles;
+        $processed_ids[] = $va->ignoreid;
+
         $name_roles = $roles;
 
-        if (SP_TEACHER_NO_EDITING != $va->roleid) {
-            $name_roles[$va->roleid]          = $name_roles[$va->roleid];
-            $name_roles[$va->roleid]['valeu'] = '1';
-            //unset($name_roles[$va->roleid]);
-        }
-
         if (SP_TEACHER_NO_EDITING == $va->roleid) {
-            $prof                             = $va->userid;
-            $va->spl                          = count($tot_splash);
-            $name_roles[$va->roleid]          = $name_roles[SP_TEACHER_NO_EDITING];
             $name_roles[$va->roleid]['valeu'] = '1';
-            //unset($name_roles[SP_TEACHER_NO_EDITING]);
-            $tmp_key_c = $ke;
-        } else if ($prof != $va->userid) {
+            $va->spl = count($tot_splash);
+        } else {
             $va->spl = '';
         }
 
+        // Manejar usuarios con múltiples roles
         foreach ($sql as $ksql => $vsql) {
             if ($va->userid == $vsql->userid && $va->ignoreid != $vsql->ignoreid) {
-                if (SP_TEACHER_NO_EDITING != $vsql->roleid) {
-                    $name_roles[$vsql->roleid]          = $name_roles[$vsql->roleid];
-                    $name_roles[$vsql->roleid]['valeu'] = '1';
-                    //unset($name_roles[$vsql->roleid];
-                }
-
                 if (SP_TEACHER_NO_EDITING == $vsql->roleid) {
-                    $prof                                       = $vsql->userid;
-                    $sql[$ke]->spl                              = count($tot_splash);
-                    $va->spl                                    = count($tot_splash);
-                    $name_roles[SP_TEACHER_NO_EDITING]          = $name_roles[SP_TEACHER_NO_EDITING];
+                    $prof = $vsql->userid;
+                    $va->spl = count($tot_splash);
                     $name_roles[SP_TEACHER_NO_EDITING]['valeu'] = '1';
-                    //unset($name_roles[SP_TEACHER_NO_EDITING]);
-                    $tmp_key_c        = $ke;
-                    $sql[$ke]->roleid = SP_TEACHER_NO_EDITING;
-                    $va->roleid       = SP_TEACHER_NO_EDITING;
-                } else if ($prof != $va->userid) {
-                    $va->spl = '';
+                    $va->roleid = SP_TEACHER_NO_EDITING;
                 }
-
                 $repetidos[] = $ksql;
                 unset($sql[$ksql]);
             }
@@ -260,7 +236,8 @@ $value->categoria = $tmp_data[4] ?? '';
 
         $va->roles = array_values($name_roles);
 
-        $sql_login = "SELECT c.id, c.fullname as virtualroom, COUNT(usr.username) as total
+        // Obtener total de logins
+        $sql_login = "SELECT COUNT(usr.username) as total
             FROM mdl_course c
             INNER JOIN mdl_context cx ON c.id = cx.instanceid
             INNER JOIN mdl_role_assignments ra ON cx.id = ra.contextid
@@ -268,119 +245,82 @@ $value->categoria = $tmp_data[4] ?? '';
             INNER JOIN mdl_role r ON ra.roleid = r.id
             INNER JOIN mdl_logstore_standard_log log ON log.userid = usr.id
             WHERE cx.contextlevel = '50'
-            AND c.category='" . $categoryid . "'
-            AND c.id = " . $value->id . "
+            AND c.category = :categoryid
+            AND c.id = :courseid
             AND ra.roleid <> 'null'
-            AND log.action='loggedin'
-            GROUP BY c.fullname
-            ORDER BY c.fullname";
+            AND log.action = 'loggedin'";
 
-        $totLogins = $DB->get_record_sql($sql_login);
-        if (is_object($totLogins)) {
-            $va->totlogins = $totLogins->total;
-        } else {
-            $va->totlogins = '0';
-        }
+        $totLogins = $DB->get_field_sql($sql_login, [
+            'categoryid' => $categoryid,
+            'courseid' => $value->id
+        ]);
+        $va->totlogins = $totLogins ?: '0';
 
-        $data    = [];
+        // Procesar semanas
+        $data = [];
         $puntaje = 0;
-        //$nsemana = $DB->get_record('config', ['name' => 'reportpointscantsem'])->value;
-        $nsemana = 17;
+        $nsemana = 17; // $DB->get_record('config', ['name' => 'reportpointscantsem'])->value;
 
         for ($i = 2; $i < $nsemana; $i++) {
-            /*
-            */
-            $exist_data = $DB->get_record('local_wsplashdata', ['courseid' => $value->id, 'semana' => $i]);
-            if (is_object($exist_data)) {
-                $tmp_data = json_decode($exist_data->data);
-                if ('Tarea' == $tmp_data[0]->tipo && $tmp_data[0]->data != []) {
-                    $tmp_data[0]->archivos = db_data($tmp_data[0]->data[0]);
-                }
-            } else {
-                $tmp_data = ws_data($value->id, $i, SP_STUDENT);
-            }
-            /*
-            */
-            //$tmp_data = ws_data($value->id, $i, SP_STUDENT);
+            $exist_data = $DB->get_record('local_wsplashdata', [
+                'courseid' => $value->id,
+                'semana' => $i
+            ]);
 
+            $tmp_data = $exist_data ? 
+                json_decode($exist_data->data) : 
+                ws_data($value->id, $i, SP_STUDENT);
 
-            if ([] == $tmp_data || !isset($tmp_data[0]->section_name)) {
-                //unset($data['Semana ' . $i]);
-                if($va->roleid == SP_STUDENT){
-                    $va->totlogins    = '';
+            if (empty($tmp_data) || !isset($tmp_data[0]->section_name)) {
+                if ($va->roleid == SP_STUDENT) {
+                    $va->totlogins = '';
                     $va->puntajetotal = '';
                 }
-                
                 continue;
             }
-            
-            /*
-            */
+
+            // Seleccionar datos principales
             if (count($tmp_data) > 1) {
                 foreach ($tmp_data as $q => $b) {
-                    if($b->archivos > 0){
-                        $tmp_data[array_keys($tmp_data)[0]] = $tmp_data[$q];
+                    if ($b->archivos > 0) {
+                        $tmp_data[0] = $b;
+                        break;
                     }
                 }
-                unset($tmp_data[array_keys($tmp_data)[1]]);
+                $tmp_data = [$tmp_data[0]];
             }
 
-            /*
-            if($value->id == 92){
-                echo "<pre>";
-                print_r($tmp_data);
-                echo "</pre>";
-            }
-            */
+            $semana_key = 'Semana ' . $tmp_data[0]->section_name;
+            $data[$semana_key] = $tmp_data;
 
-
-            $data['Semana ' . $tmp_data[0]->section_name] = $tmp_data;
-
-            if (!isset($tmp_data[0]->section_name)) {
-                echo "<pre>";
-                print_r($value);
-                print_r(ws_data($value->id, $i, SP_STUDENT));
-                print_r($tmp_data);
-                echo "</pre>";die();
+            // Calcular puntaje
+            foreach ($data[$semana_key] as $v) {
+                $puntaje += $v->puntaje ?? 0;
             }
 
-            foreach ($data['Semana ' . $tmp_data[0]->section_name] as $k => $v) {
-                if (!isset($v->puntaje)) {
-                    echo "<pre>";
-                    print_r($v);
-                    echo "</pre>";
+            // Manejar múltiples actividades por semana
+            if (count($data[$semana_key]) > 1) {
+                foreach ($data[$semana_key] as $k => $v) {
+                    $data["{$semana_key} {$k}"] = [$v];
                 }
-                $puntaje += ('' == $v->puntaje) ? 0 : $v->puntaje;
-            }
-
-            if (count($data['Semana ' . $tmp_data[0]->section_name]) > 1) {
-                foreach ($data['Semana ' . $tmp_data[0]->section_name] as $k => $v) {
-                    $data['Semana ' . $tmp_data[0]->section_name . ' ' . $k] = [$v];
-                }
-
-                unset($data['Semana ' . $tmp_data[0]->section_name]);
+                unset($data[$semana_key]);
             }
         }
-        /*
-        if($value->id == 92){
-                die();
-        }
-        */
 
-        $va->data         = array_values($data);
+        $va->data = array_values($data);
         $va->puntajetotal = $puntaje;
 
-
+        // Limpiar datos para no profesores
         if (SP_TEACHER_NO_EDITING != $va->roleid) {
-            //continue;
-            $va->totlogins    = '';
+            $va->totlogins = '';
             $va->puntajetotal = '';
-            if ([] == $data) {
+
+            if (empty($data)) {
                 continue;
             }
 
             foreach ($va->roles as $kie => $vue) {
-                if ('s' == $vue['name']) {
+                if ($vue['name'] == 's') {
                     $va->roles[$kie]['valeu'] = 1;
                 }
             }
@@ -388,26 +328,23 @@ $value->categoria = $tmp_data[4] ?? '';
             foreach ($va->data as $keee => $a_vaaa) {
                 foreach ($a_vaaa as $kee => $vaa) {
                     $a_vaaa[$kee]->activity_name = '';
-                    $a_vaaa[$kee]->section_name  = '';
-                    $a_vaaa[$kee]->puntaje       = '';
-                    $a_vaaa[$kee]->tipo          = '';
-                    $a_vaaa[$kee]->archivos      = '';
+                    $a_vaaa[$kee]->section_name = '';
+                    $a_vaaa[$kee]->puntaje = '';
+                    $a_vaaa[$kee]->tipo = '';
+                    $a_vaaa[$kee]->archivos = '';
                 }
             }
         }
 
+        $final_users[] = $va;
     }
-    $sql_wi = [];
-    if ([] != $sql && '' != $tmp_key_c) {
-        $sql_wi['temporal'] = $sql[$tmp_key_c];
-        unset($sql[$tmp_key_c]);
-        array_unshift($sql, $sql_wi['temporal']);
 
-        //$sql[$tmp_keys[0]] = $sql[$tmp_key_c];
-        //$sql[$tmp_key_c] = $sql['temporal'];
+    // Colocar al profesor primero si existe
+    if ($teacher_data) {
+        array_unshift($final_users, $teacher_data);
     }
-    $value->users[] = array_values($sql);
 
+    $value->users = [array_values($final_users)];
 }
 $output = $courses;
 
@@ -602,7 +539,7 @@ function ws_data($courseid, $section_course, $role_config)
         $role_config = " (asg.roleid = " . SP_STUDENT . " OR asg.roleid = " . SP_TEACHER_NO_EDITING . ") ";
     }
 
-    /**
+    /*
     Retorna los cursos de la categoria elegida y cantidad de alumnos matriculados
      */
 

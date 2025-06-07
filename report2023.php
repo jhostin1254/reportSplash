@@ -11,7 +11,6 @@ define('SP_FINANZAS', 12);
 define('SP_LOGISTICA', 13);
 define('SP_TALENTO_HUMANO', 14);
 
-
 global $DB, $CFG;
 
 //$DB->set_debug(true);
@@ -161,7 +160,7 @@ foreach ($courses as $key => $value) {
     $value->equipo       = isset($tmp_data[3]) ? $tmp_data[3] : '';
     $value->categoria    = isset($tmp_data[4]) ? $tmp_data[4] : '';
 
-    
+    //awui agarran a todos los usuarios inscritos al curso y no tienen wue estar suspendidos, eliminados o borrados
     $sql_roles = "SELECT concat(u.id,r.id,ra.id) as ignoreid,u.id as userid, u.firstname ,u.lastname, u.email,u.username as dni, u.address, r.id as roleid, r.name as rolfulname ,r.shortname as rolename, u.phone2, u.city as departamento, c.id as courseid
                   FROM mdl_user u
                   JOIN mdl_user_enrolments ue ON ue.userid = u.id
@@ -174,10 +173,11 @@ foreach ($courses as $key => $value) {
                   AND e.status = 0 AND u.suspended = 0 AND u.deleted = 0
                   AND ue.status = 0 ORDER BY u.lastname ASC";
 
+    // este de awui es un metodo de moodle que permite obtener los registros de una consulta sql
     $sql = $DB->get_records_sql($sql_roles);
 
     $value->users = [];
-
+    //awui se obtiene todos los usuarios que estan inscritos en el curso solo estudiantes 
     $sql_tot_splash = "SELECT concat(u.id,r.id,ra.id) as ignoreid,u.id as userid, u.firstname ,u.lastname,u.username as dni, u.email, u.address, r.id as roleid ,r.shortname as rolename, u.city as departamento, c.id as courseid
                   FROM mdl_user u
                   JOIN mdl_user_enrolments ue ON ue.userid = u.id
@@ -191,10 +191,13 @@ foreach ($courses as $key => $value) {
                   AND ue.status = 0 ORDER BY u.lastname ASC";
     $tot_splash = $DB->get_records_sql($sql_tot_splash);
 
+    //se crea esta variable para saber si es un profesor o no
     $prof = 0;
 
+    //awui se crea un array de roles que contiene los roles de los usuarios inscritos al curso
     $roles = [];
 
+    //awui se crea un array de roles globales que contiene los roles de los usuarios inscritos al cursu y se van agregando al array de roles 
     foreach ($sql as $ke => $va) {
         if ($va->userid == $prof) {
             //unset($sql[$ke]);
@@ -211,6 +214,7 @@ foreach ($courses as $key => $value) {
     $tmp_keys  = array_keys($sql);
     $tmp_key_c = '';
     $repetidos = [];
+
     foreach ($sql as $ke => $va) {
         $irse = false;
         foreach ($repetidos as $repe) {
@@ -420,9 +424,6 @@ foreach ($courses as $key => $value) {
 
 }
 
-//me quede aqui
-
-
 
 $output = $courses;
 
@@ -519,6 +520,12 @@ print_r($output);
 echo "</pre>";
 die();
 */
+
+
+//hasta este punto se obtiene los cursos, usuarios inscritos, roles y puntajes de cada semana
+
+
+
 require_once '../classes/PHPExcel.php';
 
 $titulo = "Inscritos y Puntajes";
@@ -526,6 +533,7 @@ $titulo = "Inscritos y Puntajes";
 header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
 header('Content-Disposition: attachment;filename="' . $titulo . '.xlsx"');
 header('Cache-Control: max-age=0');
+
 /*
  */
 // Se crea el objeto PHPExcel
@@ -617,7 +625,7 @@ function ws_data($courseid, $section_course, $role_config)
         $role_config = " (asg.roleid = " . SP_STUDENT . " OR asg.roleid = " . SP_TEACHER_NO_EDITING . ") ";
     }
 
-    /**
+    /*
     Retorna los cursos de la categoria elegida y cantidad de alumnos matriculados
      */
 
